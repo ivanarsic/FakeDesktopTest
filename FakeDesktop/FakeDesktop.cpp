@@ -8,83 +8,42 @@ using namespace std;
 
 const LPCWSTR wndClassName = L"Fake Desktop Class";
 
-const LPCWSTR wndName = L"Fake Desktop";
-
-const wchar_t* bitmapLocation = L"C:\\Kiosk\\background.jpg";
-//
-//HDC hdcMem = NULL;
-//HBITMAP hBmp = NULL;
-//HBITMAP hBmpOld = NULL;
-
-//void LoadPic()
-//{
-//	if (hdcMem)
-//		return;  // already loaded, no need to load it again
-//
-//	// note:  here you must put the file name in a TEXT() macro.  DO NOT CAST IT TO LPCSTR
-//	hBmp = (HBITMAP)LoadImage(NULL, bitmapLocation, IMAGE_BITMAP, 0, 0, LR_LOADFROMFILE);
-//
-//	if (!hBmp)  // the load failed (couldn't find file?  Invalid file?)
-//		return;
-//
-//	hdcMem = CreateCompatibleDC(NULL);
-//	hBmpOld = (HBITMAP)SelectObject(hdcMem, hBmp);
-//}
-
-// call this function when the program is done (shutting down)
-//void FreePic()
-//{
-//	if (hdcMem)
-//	{
-//		SelectObject(hdcMem, hBmpOld);
-//		DeleteObject(hBmp);
-//		DeleteDC(hdcMem);
-//	}
-//}
+const LPTSTR bitmapLocation = TEXT("C:\\Kiosk\\background.bmp");
 
 LRESULT CALLBACK WindowProcedure(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
 {
+	static HBITMAP bmpSource = NULL;
+	static HDC hdcSource = NULL;
+	PAINTSTRUCT ps;
+	HDC hdcDestination;
+
 	HBITMAP hBmpBck = NULL;
 	switch (msg)
 	{
 	case WM_CREATE:
 	{
-		hBmpBck = (HBITMAP)LoadImage(NULL, bitmapLocation, IMAGE_BITMAP, 0, 0, LR_LOADFROMFILE);
+		bmpSource = (HBITMAP)LoadImage(NULL, bitmapLocation, IMAGE_BITMAP, 0, 0, LR_LOADFROMFILE);
+		hdcSource = CreateCompatibleDC(GetDC(0));
+		SelectObject(hdcSource, bmpSource);
 		break;
 	}
 	case WM_CLOSE:
 	{
-		//FreePic();
+		DeleteObject(bmpSource);
+		DeleteDC(hdcSource);
 		DestroyWindow(hwnd);
 		break;
 	}
 	case WM_DESTROY:
 	{
-		DeleteObject(hBmpBck);
 		PostQuitMessage(0);
 		break;
 	}
 	case WM_PAINT:
 	{
-		if (hBmpBck != NULL)
-		{
-			BITMAP bm;
-			PAINTSTRUCT ps;
-
-			HDC hdc = BeginPaint(hwnd, &ps);
-
-			HDC hdcMem = CreateCompatibleDC(hdc);
-			HBITMAP hbmOld = (HBITMAP)SelectObject(hdcMem, hBmpBck);
-
-			GetObject(hBmpBck, sizeof(bm), &bm);
-
-			BitBlt(hdc, 0, 0, bm.bmWidth, bm.bmHeight, hdcMem, 0, 0, SRCCOPY);
-
-			SelectObject(hdcMem, hbmOld);
-			DeleteDC(hdcMem);
-
-			EndPaint(hwnd, &ps);
-		}
+		hdcDestination = BeginPaint(hwnd, &ps);
+		BitBlt(hdcDestination, 0, 0, 1024, 768, hdcSource, 0, 0, SRCCOPY);
+		EndPaint(hwnd, &ps);
 		
 		break;
 	}
