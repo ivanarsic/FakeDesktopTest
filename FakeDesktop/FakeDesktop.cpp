@@ -3,12 +3,15 @@
 #include "stdafx.h"
 #include <iostream>
 #include <stdexcept>
+#include <gdiplus.h>
+#pragma comment(lib,"gdiplus.lib")
 
 using namespace std;
+using namespace Gdiplus;
 
 const LPCWSTR wndClassName = L"Fake Desktop Class";
 
-const LPTSTR bitmapLocation = TEXT("C:\\Kiosk\\background.bmp");
+static LPCWSTR bitmapLocation;
 
 LRESULT CALLBACK WindowProcedure(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
 {
@@ -22,7 +25,10 @@ LRESULT CALLBACK WindowProcedure(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lPar
 	{
 	case WM_CREATE:
 	{
-		bmpSource = (HBITMAP)LoadImage(NULL, bitmapLocation, IMAGE_BITMAP, 0, 0, LR_LOADFROMFILE);
+		//Load a jpeg file (or any picture file supported by GDI+)
+		Bitmap mBitmap(bitmapLocation, false);
+		mBitmap.GetHBITMAP(0x00000000, &bmpSource);
+		// Getting a handler for device context for bitmap data
 		hdcSource = CreateCompatibleDC(GetDC(0));
 		SelectObject(hdcSource, bmpSource);
 		break;
@@ -41,9 +47,14 @@ LRESULT CALLBACK WindowProcedure(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lPar
 	}
 	case WM_PAINT:
 	{
-		hdcDestination = BeginPaint(hwnd, &ps);
-		BitBlt(hdcDestination, 0, 0, 1024, 768, hdcSource, 0, 0, SRCCOPY);
-		EndPaint(hwnd, &ps);
+		if (bmpSource != NULL)
+		{
+			// Getting a HDC for the display and preparing for paining
+			hdcDestination = BeginPaint(hwnd, &ps);
+			// "Painting" the bitmap to the display
+			BitBlt(hdcDestination, 0, 0, 1024, 768, hdcSource, 0, 0, SRCCOPY);
+			EndPaint(hwnd, &ps);
+		}
 		
 		break;
 	}
@@ -88,15 +99,22 @@ EXTERN_C
 		return result == DISP_CHANGE_SUCCESSFUL;
 	}
 
-	__declspec(dllexport) void __stdcall ShowDesktopWindow()
+	__declspec(dllexport) void __stdcall ShowDesktopWindow(const wchar_t *fakeDesktopLocation)
 	{	
-
+		bitmapLocation = fakeDesktopLocation;
+		//Starting GDI+ (used for loading jpeg)
+		GdiplusStartupInput gdiplusStartupInput;
+		ULONG_PTR gdiplusToken;
+		GdiplusStartup(&gdiplusToken, &gdiplusStartupInput, NULL);
+		//creating and registering window class (to be used for Faking the backround
 		WNDCLASSEX wndclass = { sizeof(WNDCLASSEX), CS_DBLCLKS, WindowProcedure,
 			0, 0, GetModuleHandle(0), LoadIcon(0, IDI_APPLICATION),
 			LoadCursor(0, IDC_ARROW), HBRUSH(COLOR_WINDOW + 1),
 			0, wndClassName, LoadIcon(0, IDI_APPLICATION) };
 		if (RegisterClassEx(&wndclass))
 		{
+			//setting the size and style of the window to POP_UP to remove border 
+			//and positioning the window as top most and maximized
 			HWND window = CreateWindowEx(0, wndClassName, 0,
 				WS_POPUP, 0, 0,
 				1024, 768, 0, 0, GetModuleHandle(0), 0);
@@ -109,16 +127,17 @@ EXTERN_C
 				while (GetMessage(&msg, 0, 0, 0)) DispatchMessage(&msg);
 			}
 		}
-
-
+		//Closing GDI+
+		GdiplusShutdown(gdiplusToken);
 	}
 
 	__declspec(dllexport) void __stdcall KillDesktopWindow()
 	{
+		// Finding the handler for the window used for faking the desktop
 		HWND window = FindWindow(wndClassName, 0);
 		if (window == NULL)
 			return;
-		LRESULT r=SendMessage(window, WM_SYSCOMMAND, SC_CLOSE, 0);
+		LRESULT r = SendMessage(window, WM_SYSCOMMAND, SC_CLOSE, 0);
 	}
 }
 
